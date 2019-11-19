@@ -3,6 +3,7 @@
    [ashikasoft.filestore.core :as fs]
    [ashikasoft.filestore.impl :as fs.impl]
    [clojure.string :as string]
+   [clojure.java.io :as io]
    [clj-jgit.porcelain :as jgit]))
 
 
@@ -24,6 +25,8 @@
     (save-to-repo! local-dir)
 )
 
+(def repo-subdir ".repo")
+
 (defn configure [repo-url]
   {:plugin-type :git
    :repo-url repo-url})
@@ -41,7 +44,7 @@
 (defmethod fs/plugin-do-init! :git [store _]
   (let [parent-dir (get-in store [:loc-info :base-dir])
         repo-url (get-in store [:plugin-data :git :repo-url])
-        local-dir (fs.impl/join-path parent-dir "repo")]
+        local-dir (fs.impl/join-path parent-dir repo-subdir)]
     ;; Clone or pull a repo directory under the base dir,
     ;; and create a file with the table name in the repo dir.
     (init-dir! repo-url local-dir)
@@ -60,10 +63,15 @@
 ;; Write method, managed as a plugin
 (defmethod fs/plugin-do-write! :git [store _]
   ;; commit and push the store's repo when writing.
-  (let [parent-dir (get-in store [:loc-info :base-dir])
-        local-dir (fs.impl/join-path parent-dir "repo")]
-  ;; TODO Copy the head revision to the entry in the repo,
-  ;; then commit and push. Report the status in the store metadata.
+  (let [{:keys [base-dir path]} (:loc-info store)
+        local-dir (fs.impl/join-path base-dir repo-subdir)
+        source-file (fs.impl/last-childname path)
+        target-file (fs.impl/join-path local-dir name)]
+    ;; Copy the head revision to the entry in the repo,
+    ;; then commit and push.
+    ;; TODO remove trailing slash from target filename, if present.
+    ;; TODO Report the status in the store metadata.
+    (io/copy (io/file source-file) (io/file target-file))
     (save-to-repo! local-dir)
     ;; Always return the store.
     store))
